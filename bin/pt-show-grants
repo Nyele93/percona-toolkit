@@ -2157,6 +2157,41 @@ sub main {
       # Add @create_user if there
       @grants = ( @create_user, @grants ) if scalar @create_user > 0;
       PTDEBUG && _d('Grants sorted:', Dumper(\@grants));
+      
+      # PT-2475. Add Feature to pt-show-grants for extracting grants on specific database
+      if (my $dbs_no = $o-get('only-dbs-no-wildcard')) {
+          my @filtered_grants;
+          foreach my $grant (@grants) {
+              # Match only listed databases – do NOT include the global "*.*" grant
+              foreach my $db (@$dbs_no) {
+                  if ($grant =~ /\bON\s+`?\Q$db\E`?\./) {
+                      push @filtered_grants, $grant;
+                      last;
+                  }
+              }
+          }
+          next USER unless @filtered_grants;
+          @grants = @filtered_grants;
+      }
+      elsif (my $dbs = $o-get('only-dbs')) {
+          my @filtered_grants;
+          foreach my $grant (@grants) {
+              # Keep global *.* grants, as before
+              if ($grant =~ /\bON\s+\*\.\*/) {
+                  push @filtered_grants, $grant;
+                  next;
+              }
+              # Also include grants on any of the named databases
+              foreach my $db (@$dbs) {
+                  if ($grant =~ /\bON\s+`?\Q$db\E`?\./) {
+                      push @filtered_grants, $grant;
+                      last;
+                  }
+              }
+          }
+          next USER unless @filtered_grants;
+          @grants = @filtered_grants;
+      }
 
       # Print REVOKE statements.
       if ( $o->get('revoke') ) {
@@ -2493,6 +2528,18 @@ Create SSL MySQL connection.
 type: array
 
 Only show grants for this comma-separated list of users.
+
+=item --only-dbs
+
+type: array
+
+Only show grants for users with privileges on this comma-separated list of databases.
+
+=item --only-dbs-no-wildcard
+
+type: array
+
+Only show grants on the specified comma-separated list of databases, excluding any global *.* grants.
 
 =item --convert-MariaDB
 
